@@ -1,0 +1,63 @@
+#!/usr/bin/bash
+set -eu
+
+POWER_SUPPLY="/sys/class/power_supply/axp288_charger"
+LIMIT_FILE="${POWER_SUPPLY}/input_current_limit"
+ONLINE_FILE="${POWER_SUPPLY}/online"
+CONFIG_FILE="/etc/default/hp-tablet-charging"
+
+log() {
+    printf '%s\n' "hp-tablet-charging: $*"
+}
+
+if [[ ! -r "$CONFIG_FILE" ]]; then
+    log "Configuration file not found: $CONFIG_FILE"
+    exit 1
+fi
+
+# The configuration file is root-owned and installed by install.sh.
+# shellcheck disable=SC1090
+. "$CONFIG_FILE"
+
+if [[ ! "${INPUT_CURRENT_LIMIT_UA:-}" =~ ^[0-9]+$ ]]; then
+    log "INPUT_CURRENT_LIMIT_UA must be a positive integer in microamps"
+    exit 1
+fi
+
+if (( INPUT_CURRENT_LIMIT_UA <= 0 )); then
+    log "INPUT_CURRENT_LIMIT_UA must be greater than zero"
+    exit 1
+fi
+
+# The power-supply device can appear shortly after userspace starts.
+for ((attempt = 0; attempt < 30; attempt++)); do
+    if [[ -e "$LIMIT_FILE" && -r "$ONLINE_FILE" ]]; then
+        break
+    fi
+    /usr/bin/sleep 1
+done
+
+if [[ ! -e "$LIMIT_FILE" || ! -r "$ONLINE_FILE" ]]; then
+    log "AXP288 charger sysfs interface is not available"
+    exit 1
+fi
+
+if [[ "$(/usr/bin/cat "$ONLINE_FILE")" != "1" ]]; then
+    log "No external power detected; leaving input-current limit unchanged"
+    exit 0
+fi
+
+if [[ ! -w "$LIMIT_FILE" ]]; then
+    log "Input-current limit is not writable: $LIMIT_FILE"
+    exit 1
+fi
+
+printf '%s\n' "$INPUT_CURRENT_LIMIT_UA" > "$LIMIT_FILE"
+
+actual_limit="$(/usr/bin/cat "$LIMIT_FILE")"
+if [[ "$actual_limit" != "$INPUT_CURRENT_LIMIT_UA" ]]; then
+    log "Requested ${INPUT_CURRENT_LIMIT_UA} µA, driver reports ${actual_limit} µA"
+    exit 1
+fi
+
+log "Input-current limit set to ${actual_limit} µA"

@@ -1,0 +1,4 @@
+# Input current limit in microamps (µA).
+# Conservative repository default: 1.5 A.
+# 2,000,000 µA = 2 A; use only after validating the full power path.
+INPUT_CURRENT_LIMIT_UA=1500000

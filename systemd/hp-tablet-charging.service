@@ -1,0 +1,11 @@
+[Unit]
+Description=Configure AXP288 input-current limit on HP Pro Tablet 408
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /usr/local/sbin/hp-tablet-charging
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
